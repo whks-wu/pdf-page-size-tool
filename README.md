@@ -1,6 +1,8 @@
 # PDF 页面尺寸工具 / PDF Page Size Tool
 
 ## 中文
+> 起因：macOS 自带的预览和我试过的几款 PDF 工具，在合并页面尺寸不一致的
+> 文件时都会把版面弄乱。找不到能用的，就自己写了一个。
 
 一个纯前端的小工具，用来处理 PDF 合并时页面大小不一致的问题。基于 [pdf-lib](https://pdf-lib.js.org/) 实现，所有处理都在浏览器本地完成，文件不会上传到任何服务器。界面支持中文、English、Deutsch 三种语言切换。
 
@@ -25,6 +27,8 @@
 ---
 
 ## English
+> Built because neither macOS Preview nor the PDF tools I tried could merge
+> files with mismatched page sizes without wrecking the layout.
 
 A pure front-end tool for handling PDFs with mismatched page sizes when merging. Built on [pdf-lib](https://pdf-lib.js.org/); everything runs locally in the browser and files are never uploaded to any server. The interface supports Chinese, English, and German.
 
