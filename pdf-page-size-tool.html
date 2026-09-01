@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 页面尺寸工具</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  :root{
+    --bg:#EEF1EE;
+    --surface:#FFFFFF;
+    --surface-alt:#F5F7F5;
+    --ink:#17242B;
+    --ink-soft:#5C6B70;
+    --blueprint:#2B6690;
+    --blueprint-dark:#1D4A66;
+    --blueprint-pale:#DCEAF2;
+    --grid:#CBD6D1;
+    --amber:#C1741F;
+    --amber-dark:#8A4E12;
+    --amber-pale:#F6E4CE;
+    --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    --sans:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      repeating-linear-gradient(0deg, rgba(43,102,144,0.05) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, rgba(43,102,144,0.05) 0 1px, transparent 1px 24px),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+  .app{max-width:760px;margin:0 auto;}
+
+  .ruler{height:14px;background-image:repeating-linear-gradient(90deg, var(--blueprint) 0 1px, transparent 1px 8px);opacity:.45;}
+  .ruler.thin{height:8px;opacity:.3;margin:18px 0;}
+
+  .hero{margin-bottom:20px;}
+  .hero-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .hero h1{
+    font-family:var(--mono);
+    font-weight:600;
+    font-size:22px;
+    letter-spacing:.02em;
+    margin:10px 0 4px;
+    color:var(--ink);
+  }
+  .hero .sub{margin:0;color:var(--ink-soft);font-size:13px;max-width:52ch;}
+  .lang-switch{flex-shrink:0;margin-top:10px;}
+  .lang-switch select{
+    font-family:var(--mono);font-size:12px;padding:6px 8px;
+    border:1px solid var(--grid);border-radius:3px;background:var(--surface);color:var(--ink);
+  }
+
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--grid);
+    border-radius:3px;
+    padding:20px;
+    margin-bottom:16px;
+  }
+  .panel h2{
+    font-family:var(--mono);
+    font-size:13px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--blueprint-dark);
+    margin:0 0 12px;
+  }
+
+  /* dropzone */
+  .dropzone{
+    position:relative;
+    border:1.5px dashed var(--grid);
+    border-radius:3px;
+    padding:36px 20px;
+    text-align:center;
+    background:var(--surface-alt);
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone.dragover{border-color:var(--blueprint);background:var(--blueprint-pale);}
+  .dropzone .corner{position:absolute;width:14px;height:14px;border-color:var(--blueprint);opacity:.55;}
+  .dropzone .tl{top:8px;left:8px;border-top:2px solid;border-left:2px solid;}
+  .dropzone .tr{top:8px;right:8px;border-top:2px solid;border-right:2px solid;}
+  .dropzone .bl{bottom:8px;left:8px;border-bottom:2px solid;border-left:2px solid;}
+  .dropzone .br{bottom:8px;right:8px;border-bottom:2px solid;border-right:2px solid;}
+  .drop-label{margin:0 0 4px;font-size:15px;}
+  .drop-hint{margin:0;font-size:12px;color:var(--ink-soft);}
+  .link-btn{
+    background:none;border:none;padding:0;
+    font:inherit;color:var(--blueprint);text-decoration:underline;cursor:pointer;
+  }
+  .link-btn:hover{color:var(--blueprint-dark);}
+
+  /* summary */
+  .summary-row{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  #summaryText{font-family:var(--mono);font-size:13px;color:var(--ink);}
+  #summaryText b{color:var(--blueprint-dark);}
+  .ghost-btn{
+    background:none;border:1px solid var(--grid);color:var(--ink-soft);
+    padding:6px 12px;border-radius:3px;font:inherit;font-size:12px;cursor:pointer;
+  }
+  .ghost-btn:hover{border-color:var(--amber);color:var(--amber-dark);}
+
+  .mismatch-tip{
+    margin-top:10px;background:var(--amber-pale);color:var(--amber-dark);
+    border:1px solid var(--amber);border-radius:3px;padding:8px 12px;font-size:12.5px;
+  }
+
+  .file-group{border-top:1px solid var(--grid);padding-top:10px;margin-top:10px;}
+  .file-group:first-child{border-top:none;margin-top:0;padding-top:0;}
+  .file-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .file-name{font-family:var(--mono);font-size:13px;font-weight:500;word-break:break-all;}
+  .file-remove{
+    background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:16px;line-height:1;
+    padding:2px 6px;
+  }
+  .file-remove:hover{color:var(--amber-dark);}
+
+  .page-row{display:flex;align-items:center;gap:12px;padding:6px 0;}
+  .swatch-box{width:46px;height:60px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .swatch{background:var(--blueprint-pale);border:1px solid var(--blueprint);}
+  .page-info{flex:1;min-width:0;}
+  .page-info .p-num{font-size:12px;color:var(--ink-soft);}
+  .page-info .p-size{font-family:var(--mono);font-size:13px;}
+  .tag{
+    display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 6px;
+    border-radius:2px;margin-left:6px;white-space:nowrap;
+  }
+  .tag-blue{background:var(--blueprint-pale);color:var(--blueprint-dark);}
+  .tag-amber{background:var(--amber-pale);color:var(--amber-dark);}
+
+  /* options */
+  .segmented{display:flex;border:1px solid var(--grid);border-radius:3px;overflow:hidden;margin-bottom:10px;}
+  .segmented label{
+    flex:1;text-align:center;padding:10px 8px;cursor:pointer;
+    font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);
+    background:var(--surface);border-right:1px solid var(--grid);
+    transition:background .15s,color .15s;
+  }
+  .segmented label:last-child{border-right:none;}
+  .segmented input{position:absolute;opacity:0;pointer-events:none;}
+  .segmented label:has(input:checked){background:var(--blueprint);color:#fff;}
+  .segmented label:focus-within{outline:2px solid var(--blueprint-dark);outline-offset:2px;}
+  .mode-desc{color:var(--ink-soft);font-size:12.5px;margin:0 0 14px;}
+
+  .field-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;}
+  .field-row label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-soft);flex:1;min-width:140px;}
+  select,input[type=number],input[type=text]{
+    font:inherit;font-family:var(--mono);font-size:13px;color:var(--ink);
+    border:1px solid var(--grid);border-radius:3px;padding:8px 10px;background:var(--surface);
+  }
+  select:focus,input:focus{outline:2px solid var(--blueprint);outline-offset:1px;}
+  .hint{font-size:12px;color:var(--ink-soft);margin:2px 0 0;}
+
+  .action-row{display:flex;align-items:center;gap:14px;margin-top:16px;flex-wrap:wrap;}
+  .primary-btn{
+    background:var(--blueprint);color:#fff;border:none;border-radius:3px;
+    padding:11px 22px;font-family:var(--mono);font-size:13px;font-weight:600;
+    letter-spacing:.03em;cursor:pointer;transition:background .15s;
+  }
+  .primary-btn:hover{background:var(--blueprint-dark);}
+  .primary-btn:disabled{background:var(--grid);color:var(--ink-soft);cursor:not-allowed;}
+  .status-text{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);}
+
+  /* result */
+  #resultPanel{border-color:var(--blueprint);}
+  .result-row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+  .result-meta{font-family:var(--mono);font-size:13px;}
+  .result-meta .file-out{font-weight:600;color:var(--blueprint-dark);}
+  .result-meta .file-sub{color:var(--ink-soft);font-size:12px;}
+  .download-btn{
+    background:var(--amber);color:#fff;border:none;border-radius:3px;
+    padding:11px 20px;font-family:var(--mono);font-size:13px;font-weight:600;
+    text-decoration:none;display:inline-block;cursor:pointer;transition:background .15s;
+  }
+  .download-btn:hover{background:var(--amber-dark);}
+
+  .footnote{text-align:center;color:var(--ink-soft);font-size:11.5px;margin-top:24px;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+  @media (max-width:520px){
+    .summary-row{flex-direction:column;align-items:flex-start;}
+    .result-row{flex-direction:column;align-items:flex-start;}
+    .hero-row{flex-direction:column;}
+  }
+  button:focus-visible, .link-btn:focus-visible{outline:2px solid var(--blueprint-dark);outline-offset:2px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="hero">
+    <div class="ruler"></div>
+    <div class="hero-row">
+      <div>
+        <h1 id="appTitle">PDF 页面尺寸工具</h1>
+        <p class="sub" id="appSubtitle">检测、合并、统一 PDF 页面尺寸 — 全部在浏览器本地完成，文件不会上传到任何服务器</p>
+      </div>
+      <div class="lang-switch">
+        <select id="langSelect" aria-label="Language / 语言 / Sprache">
+          <option value="zh">中文</option>
+          <option value="en">English</option>
+          <option value="de">Deutsch</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <section class="panel dropzone" id="dropzone">
+    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+    <input type="file" id="fileInput" multiple accept="application/pdf,.pdf" hidden>
+    <p class="drop-label"><span id="dropLabelPre">拖拽 PDF 文件到此处，或</span> <button id="browseBtn" class="link-btn" type="button">选择文件</button></p>
+    <p class="drop-hint" id="dropHint">支持一次添加多个 PDF 文件</p>
+  </section>
+
+  <section class="panel" id="summaryPanel" hidden>
+    <div class="summary-row">
+      <span id="summaryText"></span>
+      <button id="clearAllBtn" class="ghost-btn" type="button">清空全部</button>
+    </div>
+    <div id="mismatchTip"></div>
+    <div class="ruler thin"></div>
+    <div id="fileList"></div>
+  </section>
+
+  <section class="panel" id="optionsPanel" hidden>
+    <h2 id="optionsHeading">处理方式</h2>
+    <div class="segmented">
+      <label><input type="radio" name="mode" value="preserve" checked><span id="modePreserveText">保留原始尺寸合并</span></label>
+      <label><input type="radio" name="mode" value="uniform"><span id="modeUniformText">统一为指定尺寸</span></label>
+    </div>
+    <p class="mode-desc" id="modeDesc"></p>
+
+    <div id="uniformOptions" hidden>
+      <div class="field-row">
+        <label><span id="targetSizeLabelText">目标尺寸</span>
+          <select id="presetSelect">
+            <option id="opt-a4p" value="a4p">A4 竖版 · 210 × 297 mm</option>
+            <option id="opt-a4l" value="a4l">A4 横版 · 297 × 210 mm</option>
+            <option id="opt-letterp" value="letterp">Letter 竖版 · 215.9 × 279.4 mm</option>
+            <option id="opt-letterl" value="letterl">Letter 横版 · 279.4 × 215.9 mm</option>
+            <option id="opt-custom" value="custom">自定义…</option>
+          </select>
+        </label>
+      </div>
+      <div class="field-row" id="customFields" hidden>
+        <label><span id="customWLabelText">宽度 (mm)</span><input type="number" id="customW" min="10" max="2000" value="210" step="0.1"></label>
+        <label><span id="customHLabelText">高度 (mm)</span><input type="number" id="customH" min="10" max="2000" value="297" step="0.1"></label>
+      </div>
+      <p class="hint" id="uniformHint">每一页会按比例缩放并居中放入目标画布，超出部分留白 —— 内容不会被裁切或拉伸变形。</p>
+    </div>
+
+    <div class="field-row">
+      <label><span id="outNameLabelText">输出文件名</span>
+        <input type="text" id="outName" value="合并输出.pdf">
+      </label>
+    </div>
+
+    <div class="action-row">
+      <button id="processBtn" class="primary-btn" type="button">生成 PDF</button>
+      <span class="status-text" id="statusText"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="resultPanel" hidden>
+    <h2 id="resultHeading">完成</h2>
+    <div class="result-row">
+      <div class="result-meta">
+        <div class="file-out" id="resultName"></div>
+        <div class="file-sub" id="resultSub"></div>
+      </div>
+      <a id="downloadLink" class="download-btn" download>下载 PDF</a>
+    </div>
+  </section>
+
+  <p class="footnote" id="footnote">基于 pdf-lib 在浏览器内运行 · 页面数据不会离开本机</p>
+</div>
+
+<script>
+const { PDFDocument } = PDFLib;
+
+const PT_PER_MM = 72 / 25.4;
+const mmToPt = mm => mm * PT_PER_MM;
+const ptToMm = pt => pt * 25.4 / 72;
+
+const STANDARD_SIZES = [
+  { key:'a4',     orient:'portrait',  w:595.28,  h:841.89 },
+  { key:'a4',     orient:'landscape', w:841.89,  h:595.28 },
+  { key:'letter', orient:'portrait',  w:612,     h:792 },
+  { key:'letter', orient:'landscape', w:792,     h:612 },
+  { key:'legal',  orient:'portrait',  w:612,     h:1008 },
+  { key:'legal',  orient:'landscape', w:1008,    h:612 },
+  { key:'a3',     orient:'portrait',  w:841.89,  h:1190.55 },
+  { key:'a3',     orient:'landscape', w:1190.55, h:841.89 },
+  { key:'a5',     orient:'portrait',  w:419.53,  h:595.28 },
+  { key:'a5',     orient:'landscape', w:595.28,  h:419.53 },
+];
+
+function detectStandard(w, h){
+  for(const s of STANDARD_SIZES){
+    if(Math.abs(w - s.w) <= 2 && Math.abs(h - s.h) <= 2) return s;
+  }
+  return null;
+}
+
+function sizeLabel(w, h){
+  const T = t();
+  const std = detectStandard(w, h);
+  const mmText = `${ptToMm(w).toFixed(1)} × ${ptToMm(h).toFixed(1)} mm`;
+  if(std){
+    return `${mmText} · ${T.paperNames[std.key]} ${T.orientation[std.orient]}`;
+  }
+  return `${mmText} · ${T.customSizeWord}`;
+}
+
+// ---- i18n ----
+const translations = {
+  zh: {
+    langCode:'zh-CN',
+    title:'PDF 页面尺寸工具',
+    subtitle:'检测、合并、统一 PDF 页面尺寸 — 全部在浏览器本地完成，文件不会上传到任何服务器',
+    dropLabelPre:'拖拽 PDF 文件到此处，或',
+    browseBtn:'选择文件',
+    dropHint:'支持一次添加多个 PDF 文件',
+    clearAll:'清空全部',
+    summaryTemplate:'共 <b>{files}</b> 个文件 · <b>{pages}</b> 页 · 检测到 <b>{sizes}</b> 种页面尺寸',
+    mismatchTip:'页面尺寸不一致。如需整齐排版，可在下方选择「统一为指定尺寸」；若无需整齐，保留原始尺寸合并即可，大多数阅读器都能正常显示。',
+    pageLabel:'第 {n} 页',
+    fileTag:'{n} 页',
+    diffTag:'与多数页面不同',
+    optionsHeading:'处理方式',
+    modePreserve:'保留原始尺寸合并',
+    modeUniform:'统一为指定尺寸',
+    modeDescPreserve:'每个文件的原始页面尺寸保持不变，只是按添加顺序拼接成一个 PDF。适合页面大小可以不一致的场景（大多数阅读器和打印机都能正常处理）。',
+    modeDescUniform:'把所有页面统一缩放到同一张纸张尺寸，适合需要整齐排版或装订打印的场景。',
+    targetSizeLabel:'目标尺寸',
+    presetA4P:'A4 竖版 · 210 × 297 mm',
+    presetA4L:'A4 横版 · 297 × 210 mm',
+    presetLetterP:'Letter 竖版 · 215.9 × 279.4 mm',
+    presetLetterL:'Letter 横版 · 279.4 × 215.9 mm',
+    presetCustom:'自定义…',
+    customWLabel:'宽度 (mm)',
+    customHLabel:'高度 (mm)',
+    uniformHint:'每一页会按比例缩放并居中放入目标画布，超出部分留白 —— 内容不会被裁切或拉伸变形。',
+    outputNameLabel:'输出文件名',
+    outNameDefaultPreserve:'合并输出.pdf',
+    outNameDefaultUniform:'统一尺寸输出.pdf',
+    processBtn:'生成 PDF',
+    resultHeading:'完成',
+    downloadBtn:'下载 PDF',
+    resultSubTemplate:'{size} · 已在本机生成',
+    footnote:'基于 pdf-lib 在浏览器内运行 · 页面数据不会离开本机',
+    orientation:{portrait:'竖版', landscape:'横版'},
+    paperNames:{a4:'A4', letter:'Letter', legal:'Legal', a3:'A3', a5:'A5'},
+    customSizeWord:'自定义',
+    removeAria:'移除 {name}',
+    fileReadError:'无法读取文件「{name}」：{reason}',
+    genericFileErrorReason:'文件可能已损坏或受密码保护',
+    unknownError:'未知错误',
+    statusMergePreserve:'正在合并（保留原始尺寸）…',
+    statusProcessingPage:'正在处理第 {done} / {total} 页…',
+    statusPreparingDownload:'正在生成下载…',
+    statusDone:'完成 ✓',
+    statusFailed:'处理失败：{msg}',
+  },
+  en: {
+    langCode:'en',
+    title:'PDF Page Size Tool',
+    subtitle:'Detect, merge, and normalize PDF page sizes — everything runs locally in your browser, files are never uploaded anywhere',
+    dropLabelPre:'Drag PDF files here, or',
+    browseBtn:'choose files',
+    dropHint:'You can add multiple PDF files at once',
+    clearAll:'Clear all',
+    summaryTemplate:'<b>{files}</b> file(s) · <b>{pages}</b> page(s) · <b>{sizes}</b> distinct page size(s) detected',
+    mismatchTip:'Page sizes differ. For a tidy layout, choose "Normalize to one size" below; otherwise merging with original sizes works fine — most readers and printers handle mixed sizes without issue.',
+    pageLabel:'Page {n}',
+    fileTag:'{n} page(s)',
+    diffTag:'Differs from most pages',
+    optionsHeading:'Processing mode',
+    modePreserve:'Merge, keep original sizes',
+    modeUniform:'Normalize to one size',
+    modeDescPreserve:'Each file keeps its original page sizes; pages are simply concatenated in order into one PDF. Good when mixed sizes are fine — most readers and printers handle them.',
+    modeDescUniform:'Scales every page to the same paper size — useful when you need a tidy layout for printing or binding.',
+    targetSizeLabel:'Target size',
+    presetA4P:'A4 Portrait · 210 × 297 mm',
+    presetA4L:'A4 Landscape · 297 × 210 mm',
+    presetLetterP:'Letter Portrait · 215.9 × 279.4 mm',
+    presetLetterL:'Letter Landscape · 279.4 × 215.9 mm',
+    presetCustom:'Custom…',
+    customWLabel:'Width (mm)',
+    customHLabel:'Height (mm)',
+    uniformHint:'Each page is scaled proportionally and centered on the target canvas, with any extra space left blank — content is never cropped or distorted.',
+    outputNameLabel:'Output file name',
+    outNameDefaultPreserve:'merged-output.pdf',
+    outNameDefaultUniform:'resized-output.pdf',
+    processBtn:'Generate PDF',
+    resultHeading:'Done',
+    downloadBtn:'Download PDF',
+    resultSubTemplate:'{size} · generated locally',
+    footnote:'Runs in-browser via pdf-lib · your pages never leave this device',
+    orientation:{portrait:'Portrait', landscape:'Landscape'},
+    paperNames:{a4:'A4', letter:'Letter', legal:'Legal', a3:'A3', a5:'A5'},
+    customSizeWord:'Custom',
+    removeAria:'Remove {name}',
+    fileReadError:'Could not read "{name}": {reason}',
+    genericFileErrorReason:'the file may be corrupted or password protected',
+    unknownError:'unknown error',
+    statusMergePreserve:'Merging (keeping original sizes)…',
+    statusProcessingPage:'Processing page {done} of {total}…',
+    statusPreparingDownload:'Preparing download…',
+    statusDone:'Done ✓',
+    statusFailed:'Failed: {msg}',
+  },
+  de: {
+    langCode:'de',
+    title:'PDF-Seitengrößen-Tool',
+    subtitle:'PDF-Seitengrößen erkennen, zusammenführen und vereinheitlichen — alles läuft lokal im Browser, Dateien werden nirgendwohin hochgeladen',
+    dropLabelPre:'PDF-Dateien hierher ziehen oder',
+    browseBtn:'Dateien auswählen',
+    dropHint:'Mehrere PDF-Dateien können gleichzeitig hinzugefügt werden',
+    clearAll:'Alles löschen',
+    summaryTemplate:'<b>{files}</b> Datei(en) · <b>{pages}</b> Seite(n) · <b>{sizes}</b> unterschiedliche Seitengröße(n) erkannt',
+    mismatchTip:'Die Seitengrößen unterscheiden sich. Für ein einheitliches Layout unten „Auf einheitliche Größe normieren" wählen; andernfalls funktioniert das Zusammenführen mit den Originalgrößen ebenfalls gut — die meisten Reader und Drucker kommen damit zurecht.',
+    pageLabel:'Seite {n}',
+    fileTag:'{n} Seite(n)',
+    diffTag:'Weicht von den meisten Seiten ab',
+    optionsHeading:'Verarbeitungsart',
+    modePreserve:'Zusammenführen, Originalgrößen behalten',
+    modeUniform:'Auf einheitliche Größe normieren',
+    modeDescPreserve:'Jede Datei behält ihre ursprünglichen Seitengrößen; die Seiten werden nur der Reihe nach zu einem PDF zusammengefügt. Geeignet, wenn unterschiedliche Größen kein Problem sind — die meisten Reader und Drucker kommen damit zurecht.',
+    modeDescUniform:'Skaliert alle Seiten auf dieselbe Papiergröße — nützlich für ein einheitliches Layout beim Drucken oder Binden.',
+    targetSizeLabel:'Zielgröße',
+    presetA4P:'A4 Hochformat · 210 × 297 mm',
+    presetA4L:'A4 Querformat · 297 × 210 mm',
+    presetLetterP:'Letter Hochformat · 215,9 × 279,4 mm',
+    presetLetterL:'Letter Querformat · 279,4 × 215,9 mm',
+    presetCustom:'Benutzerdefiniert…',
+    customWLabel:'Breite (mm)',
+    customHLabel:'Höhe (mm)',
+    uniformHint:'Jede Seite wird proportional skaliert und auf der Zielfläche zentriert; überschüssiger Platz bleibt leer — Inhalte werden weder beschnitten noch verzerrt.',
+    outputNameLabel:'Ausgabedateiname',
+    outNameDefaultPreserve:'zusammengeführte-ausgabe.pdf',
+    outNameDefaultUniform:'vereinheitlichte-ausgabe.pdf',
+    processBtn:'PDF erstellen',
+    resultHeading:'Fertig',
+    downloadBtn:'PDF herunterladen',
+    resultSubTemplate:'{size} · lokal erzeugt',
+    footnote:'Läuft im Browser über pdf-lib · Ihre Seiten verlassen dieses Gerät nicht',
+    orientation:{portrait:'Hochformat', landscape:'Querformat'},
+    paperNames:{a4:'A4', letter:'Letter', legal:'Legal', a3:'A3', a5:'A5'},
+    customSizeWord:'Benutzerdefiniert',
+    removeAria:'{name} entfernen',
+    fileReadError:'Datei „{name}" konnte nicht gelesen werden: {reason}',
+    genericFileErrorReason:'die Datei ist möglicherweise beschädigt oder passwortgeschützt',
+    unknownError:'unbekannter Fehler',
+    statusMergePreserve:'Wird zusammengeführt (Originalgrößen bleiben erhalten)…',
+    statusProcessingPage:'Verarbeite Seite {done} von {total}…',
+    statusPreparingDownload:'Download wird vorbereitet…',
+    statusDone:'Fertig ✓',
+    statusFailed:'Fehler: {msg}',
+  },
+};
+
+let currentLang = 'zh';
+function detectDefaultLang(){
+  const nav = (navigator.language || 'zh').toLowerCase();
+  if(nav.startsWith('de')) return 'de';
+  if(nav.startsWith('en')) return 'en';
+  return 'zh';
+}
+function t(){ return translations[currentLang]; }
+function fmt(str, vars){
+  return str.replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k] !== undefined) ? vars[k] : '');
+}
+
+// ---- state ----
+let filesData = []; // { id, name, doc, pageCount, byteLength }
+let idCounter = 0;
+let lastObjectUrl = null;
+let lastSizeText = '';
+let outNameManual = false;
+
+// ---- DOM refs ----
+const langSelect = document.getElementById('langSelect');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const browseBtn = document.getElementById('browseBtn');
+const summaryPanel = document.getElementById('summaryPanel');
+const summaryText = document.getElementById('summaryText');
+const mismatchTip = document.getElementById('mismatchTip');
+const fileList = document.getElementById('fileList');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const optionsPanel = document.getElementById('optionsPanel');
+const modeDesc = document.getElementById('modeDesc');
+const uniformOptions = document.getElementById('uniformOptions');
+const presetSelect = document.getElementById('presetSelect');
+const customFields = document.getElementById('customFields');
+const customW = document.getElementById('customW');
+const customH = document.getElementById('customH');
+const outName = document.getElementById('outName');
+const processBtn = document.getElementById('processBtn');
+const statusText = document.getElementById('statusText');
+const resultPanel = document.getElementById('resultPanel');
+const resultName = document.getElementById('resultName');
+const resultSub = document.getElementById('resultSub');
+const downloadLink = document.getElementById('downloadLink');
+
+// ---- language switching ----
+langSelect.addEventListener('change', () => {
+  currentLang = langSelect.value;
+  applyStaticTexts();
+});
+
+function applyStaticTexts(){
+  const T = t();
+  document.documentElement.lang = T.langCode;
+  document.title = T.title;
+  document.getElementById('appTitle').textContent = T.title;
+  document.getElementById('appSubtitle').textContent = T.subtitle;
+  document.getElementById('dropLabelPre').textContent = T.dropLabelPre;
+  browseBtn.textContent = T.browseBtn;
+  document.getElementById('dropHint').textContent = T.dropHint;
+  clearAllBtn.textContent = T.clearAll;
+  document.getElementById('optionsHeading').textContent = T.optionsHeading;
+  document.getElementById('modePreserveText').textContent = T.modePreserve;
+  document.getElementById('modeUniformText').textContent = T.modeUniform;
+  document.getElementById('targetSizeLabelText').textContent = T.targetSizeLabel;
+  document.getElementById('opt-a4p').textContent = T.presetA4P;
+  document.getElementById('opt-a4l').textContent = T.presetA4L;
+  document.getElementById('opt-letterp').textContent = T.presetLetterP;
+  document.getElementById('opt-letterl').textContent = T.presetLetterL;
+  document.getElementById('opt-custom').textContent = T.presetCustom;
+  document.getElementById('customWLabelText').textContent = T.customWLabel;
+  document.getElementById('customHLabelText').textContent = T.customHLabel;
+  document.getElementById('uniformHint').textContent = T.uniformHint;
+  document.getElementById('outNameLabelText').textContent = T.outputNameLabel;
+  processBtn.textContent = T.processBtn;
+  document.getElementById('resultHeading').textContent = T.resultHeading;
+  document.getElementById('footnote').textContent = T.footnote;
+  downloadLink.textContent = T.downloadBtn;
+
+  updateModeDescText();
+  setOutNameDefault();
+  if(!resultPanel.hidden){
+    resultSub.textContent = fmt(T.resultSubTemplate, { size:lastSizeText });
+  }
+  render();
+}
+
+// ---- events: add files ----
+browseBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); fileInput.value = ''; });
+
+['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e => {
+  e.preventDefault(); dropzone.classList.add('dragover');
+}));
+['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e => {
+  e.preventDefault(); dropzone.classList.remove('dragover');
+}));
+dropzone.addEventListener('drop', e => {
+  if(e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+});
+
+async function handleFiles(fileListInput){
+  const files = Array.from(fileListInput).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+  for(const file of files){
+    try{
+      const bytes = await file.arrayBuffer();
+      const doc = await PDFDocument.load(bytes, { ignoreEncryption:true });
+      filesData.push({
+        id: ++idCounter,
+        name: file.name,
+        doc,
+        pageCount: doc.getPageCount(),
+        byteLength: bytes.byteLength,
+      });
+    }catch(err){
+      const T = t();
+      alert(fmt(T.fileReadError, { name:file.name, reason: err.message || T.genericFileErrorReason }));
+    }
+  }
+  render();
+}
+
+function removeFile(id){
+  filesData = filesData.filter(f => f.id !== id);
+  render();
+}
+clearAllBtn.addEventListener('click', () => { filesData = []; hideResult(); render(); });
+
+// ---- rendering ----
+function collectPages(){
+  const pages = [];
+  for(const f of filesData){
+    for(let i = 0; i < f.pageCount; i++){
+      const { width, height } = f.doc.getPage(i).getSize();
+      pages.push({ fileId:f.id, fileName:f.name, pageIndex:i, w:width, h:height });
+    }
+  }
+  return pages;
+}
+
+function render(){
+  const T = t();
+  const hasFiles = filesData.length > 0;
+  summaryPanel.hidden = !hasFiles;
+  optionsPanel.hidden = !hasFiles;
+  if(!hasFiles){ fileList.innerHTML=''; return; }
+
+  const pages = collectPages();
+  const totalPages = pages.length;
+
+  const freq = {};
+  for(const p of pages){
+    const key = `${Math.round(p.w)}x${Math.round(p.h)}`;
+    freq[key] = (freq[key] || 0) + 1;
+  }
+  const distinctCount = Object.keys(freq).length;
+  const modeKey = Object.keys(freq).sort((a,b) => freq[b]-freq[a])[0];
+
+  summaryText.innerHTML = fmt(T.summaryTemplate, { files:filesData.length, pages:totalPages, sizes:distinctCount });
+
+  mismatchTip.innerHTML = distinctCount > 1
+    ? `<div class="mismatch-tip">${T.mismatchTip}</div>`
+    : '';
+
+  fileList.innerHTML = filesData.map(f => {
+    const rows = [];
+    for(let i = 0; i < f.pageCount; i++){
+      const { width, height } = f.doc.getPage(i).getSize();
+      const key = `${Math.round(width)}x${Math.round(height)}`;
+      const differs = distinctCount > 1 && key !== modeKey;
+      const scale = Math.min(46/width, 60/height);
+      const sw = Math.max(4, Math.round(width*scale));
+      const sh = Math.max(4, Math.round(height*scale));
+      rows.push(`
+        <div class="page-row">
+          <div class="swatch-box"><div class="swatch" style="width:${sw}px;height:${sh}px;"></div></div>
+          <div class="page-info">
+            <div class="p-num">${fmt(T.pageLabel, {n:i+1})}</div>
+            <div class="p-size">${sizeLabel(width, height)}${differs ? `<span class="tag tag-amber">${T.diffTag}</span>` : ''}</div>
+          </div>
+        </div>`);
+    }
+    return `
+      <div class="file-group">
+        <div class="file-head">
+          <span class="file-name">${escapeHtml(f.name)} <span class="tag tag-blue">${fmt(T.fileTag,{n:f.pageCount})}</span></span>
+          <button class="file-remove" type="button" data-remove="${f.id}" aria-label="${fmt(T.removeAria,{name:escapeHtml(f.name)})}">×</button>
+        </div>
+        ${rows.join('')}
+      </div>`;
+  }).join('');
+
+  fileList.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', () => removeFile(Number(btn.dataset.remove)));
+  });
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- mode / options ----
+document.querySelectorAll('input[name=mode]').forEach(r => {
+  r.addEventListener('change', updateModeUI);
+});
+function updateModeDescText(){
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  const T = t();
+  modeDesc.textContent = mode === 'uniform' ? T.modeDescUniform : T.modeDescPreserve;
+}
+function setOutNameDefault(){
+  if(outNameManual) return;
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  const T = t();
+  outName.value = mode === 'uniform' ? T.outNameDefaultUniform : T.outNameDefaultPreserve;
+}
+outName.addEventListener('input', () => { outNameManual = true; });
+
+function updateModeUI(){
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  uniformOptions.hidden = mode !== 'uniform';
+  updateModeDescText();
+  setOutNameDefault();
+}
+
+presetSelect.addEventListener('change', () => {
+  customFields.hidden = presetSelect.value !== 'custom';
+});
+
+function getTargetSizePt(){
+  const preset = presetSelect.value;
+  const table = {
+    a4p:[210,297], a4l:[297,210],
+    letterp:[215.9,279.4], letterl:[279.4,215.9],
+  };
+  let wMm, hMm;
+  if(preset === 'custom'){
+    wMm = parseFloat(customW.value) || 210;
+    hMm = parseFloat(customH.value) || 297;
+  } else {
+    [wMm, hMm] = table[preset];
+  }
+  return [mmToPt(wMm), mmToPt(hMm)];
+}
+
+// ---- processing ----
+processBtn.addEventListener('click', async () => {
+  if(filesData.length === 0) return;
+  processBtn.disabled = true;
+  hideResult();
+  const T = t();
+  try{
+    const mode = document.querySelector('input[name=mode]:checked').value;
+    let outBytes;
+    if(mode === 'preserve'){
+      outBytes = await buildPreserve();
+    } else {
+      outBytes = await buildUniform();
+    }
+    statusText.textContent = T.statusPreparingDownload;
+    showResult(outBytes);
+    statusText.textContent = T.statusDone;
+  }catch(err){
+    console.error(err);
+    statusText.textContent = fmt(T.statusFailed, { msg: err.message || T.unknownError });
+  }finally{
+    processBtn.disabled = false;
+  }
+});
+
+async function buildPreserve(){
+  statusText.textContent = t().statusMergePreserve;
+  const out = await PDFDocument.create();
+  for(const f of filesData){
+    const idx = f.doc.getPageIndices();
+    const copied = await out.copyPages(f.doc, idx);
+    copied.forEach(p => out.addPage(p));
+  }
+  return out.save();
+}
+
+async function buildUniform(){
+  const [targetW, targetH] = getTargetSizePt();
+  const out = await PDFDocument.create();
+  const pages = collectPages();
+  let done = 0;
+  for(const f of filesData){
+    for(let i = 0; i < f.pageCount; i++){
+      done++;
+      statusText.textContent = fmt(t().statusProcessingPage, { done, total: pages.length });
+      const srcPage = f.doc.getPage(i);
+      const embedded = await out.embedPage(srcPage);
+      const scale = Math.min(targetW/embedded.width, targetH/embedded.height);
+      const w = embedded.width*scale, h = embedded.height*scale;
+      const page = out.addPage([targetW, targetH]);
+      page.drawPage(embedded, { x:(targetW-w)/2, y:(targetH-h)/2, width:w, height:h });
+    }
+  }
+  return out.save();
+}
+
+function showResult(bytes){
+  if(lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
+  const blob = new Blob([bytes], { type:'application/pdf' });
+  lastObjectUrl = URL.createObjectURL(blob);
+  const name = (outName.value || 'output.pdf').trim() || 'output.pdf';
+  downloadLink.href = lastObjectUrl;
+  downloadLink.download = name.toLowerCase().endsWith('.pdf') ? name : name + '.pdf';
+  resultName.textContent = name;
+  const kb = bytes.byteLength / 1024;
+  const sizeText = kb > 1024 ? (kb/1024).toFixed(2)+' MB' : kb.toFixed(0)+' KB';
+  lastSizeText = sizeText;
+  resultSub.textContent = fmt(t().resultSubTemplate, { size:sizeText });
+  resultPanel.hidden = false;
+}
+function hideResult(){ resultPanel.hidden = true; statusText.textContent=''; }
+
+// ---- init ----
+currentLang = detectDefaultLang();
+langSelect.value = currentLang;
+updateModeUI();
+applyStaticTexts();
+</script>
+</body>
+</html>
